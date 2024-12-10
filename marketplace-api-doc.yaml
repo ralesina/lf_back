@@ -1,0 +1,383 @@
+openapi: 3.0.0
+info:
+  title: Marketplace API
+  description: API para marketplace local con comercios y clientes
+  version: 1.0.0
+  contact:
+    email: support@marketplace.com
+
+servers:
+  - url: http://localhost/api
+    description: Local development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errors:
+          type: object
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - nombre
+      properties:
+        email:
+          type: string
+          format: email
+          example: usuario@example.com
+        password:
+          type: string
+          format: password
+          minLength: 6
+          example: password123
+        nombre:
+          type: string
+          example: Juan Pérez
+        rol:
+          type: string
+          enum: [cliente, comercio]
+          default: cliente
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    PedidoRequest:
+      type: object
+      required:
+        - id_comercio
+        - direccion_entrega
+        - telefono_contacto
+        - items
+        - metodo_pago
+      properties:
+        id_comercio:
+          type: integer
+        direccion_entrega:
+          type: string
+        telefono_contacto:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id_producto:
+                type: integer
+              cantidad:
+                type: integer
+        metodo_pago:
+          type: string
+          enum: [efectivo, tarjeta]
+        instrucciones:
+          type: string
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Autenticación
+      summary: Registrar nuevo usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Usuario registrado exitosamente
+        '400':
+          description: Datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags:
+        - Autenticación
+      summary: Iniciar sesión
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                      access_token:
+                        type: string
+                      refresh_token:
+                        type: string
+                      expires_in:
+                        type: integer
+        '401':
+          description: Credenciales inválidas
+
+  /clientes/pedido:
+    post:
+      tags:
+        - Pedidos
+      summary: Realizar nuevo pedido
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PedidoRequest'
+      responses:
+        '200':
+          description: Pedido creado exitosamente
+        '400':
+          description: Datos inválidos
+        '401':
+          description: No autorizado
+
+  /clientes/pedidos/{id}:
+    get:
+      tags:
+        - Pedidos
+      summary: Consultar pedidos del cliente
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de pedidos
+        '401':
+          description: No autorizado
+
+  /clientes/comercios/buscar/{id}:
+    get:
+      tags:
+        - Comercios
+      summary: Buscar comercio por ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Datos del comercio
+        '404':
+          description: Comercio no encontrado
+
+  /clientes/comercios/cercanos:
+    get:
+      tags:
+        - Comercios
+      summary: Buscar comercios cercanos
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: latitud
+          required: true
+          schema:
+            type: number
+            format: float
+        - in: query
+          name: longitud
+          required: true
+          schema:
+            type: number
+            format: float
+        - in: query
+          name: radio
+          required: true
+          schema:
+            type: integer
+            description: Radio en metros
+      responses:
+        '200':
+          description: Lista de comercios cercanos
+
+  /clientes/pedido/cancelar/{id}:
+    post:
+      tags:
+        - Pedidos
+      summary: Cancelar pedido
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Pedido cancelado exitosamente
+        '400':
+          description: No se puede cancelar el pedido
+
+  /comercios/inventario/{id}:
+    post:
+      tags:
+        - Comercios
+      summary: Editar inventario de producto
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - stock
+              properties:
+                stock:
+                  type: integer
+      responses:
+        '200':
+          description: Inventario actualizado
+
+  /comercios/pedido/gestionar/{id}:
+    post:
+      tags:
+        - Comercios
+      summary: Gestionar estado de pedido
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nuevoEstado
+              properties:
+                nuevoEstado:
+                  type: string
+                  enum: [preparando, enviado, completado]
+      responses:
+        '200':
+          description: Estado actualizado exitosamente
+  /comercios/pedidos:
+    get:
+      tags:
+        - Comercios
+      summary: Listar pedidos del comercio
+      description: Obtiene todos los pedidos asociados al comercio del usuario autenticado
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de pedidos exitosa
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id_pedido:
+                          type: integer
+                        fecha_pedido:
+                          type: string
+                          format: date-time
+                        estado:
+                          type: string
+                          enum: [pendiente, confirmado, en_preparacion, en_camino, entregado, cancelado]
+                        total:
+                          type: number
+                          format: float
+                        cliente_nombre:
+                          type: string
+                        cliente_email:
+                          type: string
+                        direccion_entrega:
+                          type: string
+                        telefono_contacto:
+                          type: string
+                        productos:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              nombre:
+                                type: string
+                              cantidad:
+                                type: integer
+        '401':
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: No tiene permisos de comercio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
