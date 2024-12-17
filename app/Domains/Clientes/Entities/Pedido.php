@@ -28,7 +28,7 @@ class Pedido extends Entity
         'fecha_entrega' => 'datetime'
     ];
 
-    protected const ESTADOS_VALIDOS = [
+    public const ESTADOS_VALIDOS = [
         'pendiente',
         'confirmado',
         'en_preparacion',

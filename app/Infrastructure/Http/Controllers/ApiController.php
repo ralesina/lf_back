@@ -3,8 +3,10 @@
 namespace App\Infrastructure\Http\Controllers;
 
 use App\Controllers\BaseController;
+use App\Domains\Clientes\Entities\Pedido;
 use App\Exceptions\DomainException;
 use App\Exceptions\ValidationException;
+use App\Infrastructure\Auth\JWTService;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
 
@@ -12,6 +14,7 @@ class ApiController extends BaseController
 {
     protected  $registerUser;
     protected  $authenticateUser;
+
     protected  $realizarPedido;
     protected  $consultarPedidos;
     protected  $buscarComercio;
@@ -20,6 +23,24 @@ class ApiController extends BaseController
     protected  $gestionarPedido;
     protected  $listarPedidosComercio;
     protected $agregarProducto;
+    protected $listarComerciosDestacados;
+    protected $listarCategorias;
+    protected $buscarComercios;
+    protected $listarProductosComercio;
+    protected $listarProductosComercios;
+    protected $cambiarEstadoProducto;
+    protected $editarProducto;
+    protected $refreshToken;
+    protected $logoutUser;
+    protected $consultarPedidosActivos;
+    protected $editarInventario;
+    protected $consultarHistorialPedidos;
+    protected $buscarComerciosPorFiltros;
+    protected $editarPerfil;
+    protected $getPerfil;
+    protected $BuscarComercio;
+    protected $consultarPedido;
+
     public function __construct() {
         $this->inicializarServicios();
 
@@ -29,131 +50,262 @@ class ApiController extends BaseController
         parent::initController($request, $response, $logger);
         $this->inicializarServicios();
     }
-    public function register()
+    public function register(): ResponseInterface
     {
         return $this->executeUseCase(function() {
             $data = $this->request->getJSON(true);
-
-            if (empty($data)) {
-                throw new \App\Exceptions\ValidationException([
-                    'message' => 'No se recibieron datos'
-                ]);
-            }
-
-            if (!isset($data['rol'])) {
-                $data['rol'] = 'cliente';
-            }
-
             return $this->registerUser->execute($data);
         });
     }
 
-    public function login()
+    public function login(): ResponseInterface
     {
         return $this->executeUseCase(function() {
             $data = $this->request->getJSON(true);
-
-            if (!isset($data['email']) || !isset($data['password'])) {
-                throw new \App\Exceptions\ValidationException([
-                    'message' => 'Email y contraseña son requeridos'
-                ]);
-            }
-
-            return $this->authenticateUser->execute(
-                $data['email'],
-                $data['password']
-            );
+            return $this->authenticateUser->execute($data['email'], $data['password']);
         });
     }
-    public function listarPedidosComercio()
+
+    public function refreshToken(): ResponseInterface
     {
         return $this->executeUseCase(function() {
-            $idUsuario = $this->request->user->id;
+            $refreshToken = $this->request->getJsonVar('refresh_token');
+            return $this->refreshToken->execute($refreshToken);
+        });
+    }
 
-            if ($this->request->user->role !== 'comercio') {
-                throw new \App\Exceptions\ValidationException([
-                    'message' => 'No tiene permisos para realizar esta acción'
-                ]);
+    public function logout(): ResponseInterface
+    {
+        return $this->executeUseCase(function() {
+            return $this->logoutUser->execute($this->request->user->id);
+        });
+    }
+    public function getPerfil(): ResponseInterface
+    {
+        return $this->executeUseCase(function() {
+            return $this->getPerfil->execute($this->request->user->id);
+        });
+    }
+
+    public function editarPerfil(): ResponseInterface
+    {
+        return $this->executeUseCase(function() {
+            $data = $this->request->getJSON(true);
+            return $this->editarPerfil->execute($this->request->user->id, $data);
+        });
+    }
+    // Cliente - Pedidos
+    public function realizarPedido(): ResponseInterface
+    {
+        return $this->executeUseCase(function() {
+            $data = $this->request->getJSON(true);
+            return $this->realizarPedido->execute($data);
+        });
+    }
+
+    public function consultarPedidosActivos(): ResponseInterface
+    {
+        return $this->executeUseCase(function() {
+            $user = JWTService::getUser();
+
+            // Validar el tipo de usuario
+            if ($user['type'] === 'cliente' && isset($user['id_cliente'])) {
+                return $this->consultarPedidosActivos->execute($user['id_cliente']);
             }
 
-            return $this->listarPedidosComercio->execute($idUsuario);
+            return $this->response->setStatusCode(403)->setJSON([
+                'success' => false,
+                'message' => 'Solo los clientes pueden consultar pedidos activos.'
+            ]);
         });
     }
-    public function realizarPedido(RequestInterface $request): ResponseInterface
+    public function consultarPedidoDetalle(int $idPedido): ResponseInterface
     {
-        $data = $request->getJSON(true);
-        $result = $this->realizarPedido->execute($data);
-        return $this->respond(['success' => true, 'data' => $result]);
-    }
+        return $this->executeUseCase(function() use ($idPedido){
+            $user = JWTService::getUser();
 
-    public function buscarComercio(int $id): ResponseInterface
-    {
-        $result = $this->buscarComercio->execute($id);
-        return $this->respond(['success' => true, 'data' => $result]);
-    }
+            if ($user['type'] === 'cliente') {
+                return $this->consultarPedido->execute($idPedido, $user['id_cliente']);
+            }
 
-    public function consultarPedidos(int $idCliente): ResponseInterface
-    {
-        return $this->executeUseCase(function() use ($idCliente) {
-            return $this->consultarPedidos->execute($idCliente);
+            return [
+                'success' => false,
+                'message' => 'Solo los clientes pueden consultar pedidos activos.'
+            ];
         });
     }
-
-    public function buscarCercano(): ResponseInterface
+    public function consultarHistorialPedidos(): ResponseInterface
     {
-        $latitud = (float)$this->request->getGet('latitud');
-        $longitud = (float)$this->request->getGet('longitud');
-        $radio = (int)$this->request->getGet('radio');
+        return $this->executeUseCase(function() {
+            $user = JWTService::getUser();
 
-        if(!$latitud || !$longitud || !$radio) {
-            throw new ValidationException(['message' => 'Parámetros de búsqueda inválidos']);
-        }
+            if ($user['type'] === 'cliente') {
+                return $this->consultarHistorialPedidos->execute($user['id_cliente']);
+            }
 
-        return $this->executeUseCase(function() use ($latitud, $longitud, $radio) {
-            return $this->buscarCercano->execute($latitud, $longitud, $radio);
+            return [
+                'success' => false,
+                'message' => 'Solo los clientes pueden consultar el historial de pedidos.'
+            ];
         });
     }
 
     public function cancelarPedido(int $idPedido): ResponseInterface
     {
-        $idCliente = $this->request->user->id;
+        return $this->executeUseCase(function() use ($idPedido) {
+            $user = JWTService::getUser();
+            return $this->cancelarPedido->execute($idPedido, $user['id_cliente']);
+        });
+    }
 
-        try {
-            $this->cancelarPedido->execute($idPedido, $idCliente);
-            return $this->respond(['success' => true, 'message' => 'Pedido cancelado exitosamente.']);
-        } catch (ValidationException | DomainException $e) {
-            return $this->respond(['success' => false, 'message' => $e->getMessage()], 400);
-        } catch (\Exception $e) {
-            return $this->respond(['success' => false, 'message' => 'Error interno del servidor.'], 500);
-        }
+    // Cliente - Comercios
+    public function buscarComerciosPorFiltros(): ResponseInterface
+    {
+        return $this->executeUseCase(function() {
+            $filtros = $this->request->getGet();
+            return $this->buscarComerciosPorFiltros->execute($filtros);
+        });
+    }
+
+    public function buscarCercano(): ResponseInterface
+    {
+        return $this->executeUseCase(function() {
+            $latitud = (float)$this->request->getGet('latitud');
+            $longitud = (float)$this->request->getGet('longitud');
+            $radio = (int)$this->request->getGet('radio');
+            return $this->buscarCercano->execute($latitud, $longitud, $radio);
+        });
+    }
+
+    public function comerciosDestacados(): ResponseInterface
+    {
+        return $this->executeUseCase(function() {
+            return $this->listarComerciosDestacados->execute();
+        });
+    }
+
+    public function categorias(): ResponseInterface
+    {
+        return $this->executeUseCase(function() {
+            return $this->listarCategorias->execute();
+        });
+    }
+    public function getDatosComercio($id_comercio): ResponseInterface
+    {
+        return $this->executeUseCase(function() use ($id_comercio) {
+            return $this->buscarComercio->execute($id_comercio);
+        });
+    }
+    public function listarProductosComercio($id_comercio): ResponseInterface
+    {
+        return $this->executeUseCase(function() use ($id_comercio) {
+            return $this->listarProductosComercio->execute($id_comercio);
+        });
+    }
+    // Comercio - Productos
+    public function listarProductos(): ResponseInterface
+    {
+        return $this->executeUseCase(function() {
+            return $this->listarProductosComercios->execute($this->request->user->id);
+        });
+    }
+
+    public function agregarProducto(): ResponseInterface
+    {
+        return $this->executeUseCase(function() {
+            $data = $this->request->getPost(); // Cambiar a getPost para manejar multipart/form-data
+            $data['id_usuario'] = $this->request->user->id;
+            $imagen = $this->request->getFile('imagen');
+
+            return $this->agregarProducto->execute($data, $imagen);
+        });
+    }
+
+    public function editarProducto(int $idProducto): ResponseInterface
+    {
+        return $this->executeUseCase(function() use ($idProducto) {
+            $data = $this->request->getPost();
+            $imagen = $this->request->getFile('imagen');
+
+            return $this->editarProducto->execute($idProducto, $data, $imagen);
+        });
+    }
+
+    public function cambiarEstadoProducto(int $idProducto): ResponseInterface
+    {
+        return $this->executeUseCase(function() use ($idProducto) {
+            $estado = $this->request->getJsonVar('estado');
+            return $this->cambiarEstadoProducto->execute($idProducto, $estado);
+        });
+    }
+
+    // Comercio - Inventario
+    public function editarInventario(int $idProducto): ResponseInterface
+    {
+        return $this->executeUseCase(function() use ($idProducto) {
+            $datos = $this->request->getJSON(true);
+
+            if (!isset($datos['stock'])) {
+                return $this->response->setStatusCode(400)->setJSON([
+                    'success' => false,
+                    'message' => 'El stock es requerido'
+                ]);
+            }
+
+            $resultado = $this->editarInventario->execute(
+                (int)$idProducto,
+                ['stock' => (int)$datos['stock']]
+            );
+            if ($resultado) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => 'Stock actualizado correctamente'
+                ]);
+            } else {
+                return $this->response->setStatusCode(500)->setJSON([
+                    'success' => false,
+                    'message' => 'Error al actualizar el stock'
+                ]);
+            }
+        });
+
+    }
+
+    // Comercio - Pedidos
+    public function listarPedidosComercio($estado = null): ResponseInterface
+    {
+        return $this->executeUseCase(function() use ($estado) {
+            // Validar que el estado sea válido según los estados definidos en la entidad
+            if ($estado && !in_array($estado, Pedido::ESTADOS_VALIDOS)) {
+                return $this->response->setStatusCode(400)->setJSON([
+                    'success' => false,
+                    'message' => 'Estado no válido'
+                ]);
+            }
+
+            return $this->listarPedidosComercio->execute(
+                $this->request->user->id,
+                $estado
+            );
+        });
     }
 
     public function gestionarPedido(int $idPedido): ResponseInterface
     {
-        $idComercio = $this->request->user->id;
-        $data = $this->request->getJSON(true);
+        return $this->executeUseCase(function() use ($idPedido) {
+            $nuevoEstado = $this->request->getJsonVar('estado');
 
-        try {
-            $this->gestionarPedido->execute($idPedido, $idComercio, $data['nuevoEstado']);
-            return $this->respond(['success' => true, 'message' => 'Pedido actualizado exitosamente.']);
-        } catch (ValidationException | DomainException $e) {
-            return $this->respond(['success' => false, 'message' => $e->getMessage()], 400);
-        } catch (\Exception $e) {
-            return $this->respond(['success' => false, 'message' => 'Error interno del servidor.'], 500);
-        }
-    }
-    public function agregarProducto(): ResponseInterface
-    {
-        return $this->executeUseCase(function() {
-            if (!$this->request->user->role === 'comercio') {
-                throw new ValidationException(['message' => 'No autorizado']);
+            if (!$nuevoEstado) {
+                throw new ValidationException(['El campo "estado" es obligatorio.']);
             }
 
-            $data = $this->request->getJSON(true);
-            $data['id_comercio'] = $this->request->user->id;
-            $image = $this->request->getFile('imagen');
+            $user = JWTService::getUser();
 
-            return $this->agregarProducto->execute($data, $image);
+            if ($user['type'] !== 'comercio' || !isset($user['id_comercio'])) {
+                throw new DomainException('El usuario no tiene permisos para gestionar pedidos.');
+            }
+
+            return $this->gestionarPedido->execute($idPedido, $user['id_comercio'], $nuevoEstado);
         });
     }
     /**
@@ -165,11 +317,27 @@ class ApiController extends BaseController
         $this->authenticateUser = service('authenticateUser');
         $this->realizarPedido = service('realizarPedido');
         $this->consultarPedidos = service('consultarPedidos');
+        $this->consultarPedido = service('consultarPedido');
         $this->buscarComercio = service('buscarComercio');
         $this->buscarCercano = service('buscarCercano');
         $this->cancelarPedido = service('cancelarPedido');
         $this->gestionarPedido = service('gestionarPedido');
         $this->listarPedidosComercio = service('listarPedidosComercio');
         $this->agregarProducto = service('agregarProducto');
+        $this->listarComerciosDestacados = service('listarComerciosDestacados');
+        $this->listarCategorias = service('listarCategorias');
+        $this->buscarComercios = service('buscarComercios');
+        $this->listarProductosComercio = service('listarProductosComercio');
+        $this->listarProductosComercios = service('listarProductosComercios');
+        $this->editarProducto = service('editarProducto');
+        $this->cambiarEstadoProducto = service('cambiarEstadoProducto');
+        $this->refreshToken = service('$refreshToken');
+        $this->logoutUser = service('logoutUser');
+        $this->consultarPedidosActivos = service('consultarPedidosActivos');
+        $this->editarInventario = service('editarInventario');
+        $this->consultarHistorialPedidos = service('consultarHistorialPedidos');
+        $this->buscarComerciosPorFiltros = service('buscarComerciosPorFiltros');
+        $this->editarPerfil = service('editarPerfil');
+        $this->getPerfil = service('getPerfil');
     }
 }

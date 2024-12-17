@@ -19,19 +19,18 @@ class GestionarPedido
     {
         // Verificar si el pedido existe y pertenece al comercio
         $pedido = $this->pedidoRepository->findById($idPedido);
-
         if (!$pedido) {
             throw new DomainException('El pedido no existe.');
         }
 
-        if ($pedido['id_comercio'] !== $idComercio) {
-            throw new ValidationException('El comercio no tiene permiso para gestionar este pedido.');
+        if ((int) $pedido['id_comercio'] !== (int) $idComercio) {
+            throw new ValidationException(['El comercio no tiene permiso para gestionar este pedido.']);
         }
 
         // Validar estado permitido
-        $estadosPermitidos = ['preparando', 'enviado', 'completado'];
+        $estadosPermitidos = ['pendiente', 'confirmado', 'en_preparacion', 'en_camino', 'entregado', 'cancelado'];
         if (!in_array($nuevoEstado, $estadosPermitidos)) {
-            throw new ValidationException('El estado especificado no es válido.');
+            throw new ValidationException(['El estado especificado no es válido.']);
         }
 
         // Actualizar el estado del pedido

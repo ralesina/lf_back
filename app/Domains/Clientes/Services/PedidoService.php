@@ -78,6 +78,45 @@ class PedidoService
         return true;
     }
 
+
+    public function getPedidosActivos(int $idCliente): array
+    {
+        return $this->pedidoRepository->findActivosByCliente($idCliente);
+    }
+
+    public function getHistorialPedidos(int $idCliente): array
+    {
+        return $this->pedidoRepository->findHistorialByCliente($idCliente);
+    }
+    public function getPedidoDetalle(int $idPedido, int $idCliente): array
+    {
+        $pedido = $this->pedidoRepository->getPedidoConDetalles($idPedido,$idCliente);
+
+        if (!$pedido) {
+            throw new DomainException('Pedido no encontrado');
+        }
+
+        return $pedido;
+    }
+    public function cancelarPedido(int $idPedido, int $idCliente): bool
+    {
+        $pedido = $this->pedidoRepository->findById($idPedido);
+
+        if (!$pedido) {
+            throw new DomainException('Pedido no encontrado');
+        }
+
+        if ($pedido['id_cliente'] !== $idCliente) {
+            throw new ValidationException(['pedido' => 'No tienes permiso para cancelar este pedido']);
+        }
+
+        if ($pedido['estado'] !== 'pendiente') {
+            throw new DomainException('Solo se pueden cancelar pedidos en estado pendiente');
+        }
+
+        return $this->pedidoRepository->update($idPedido, ['estado' => 'cancelado']);
+    }
+
     private function validarDatosPedido(array $data): void
     {
         $errors = [];
@@ -92,6 +131,18 @@ class PedidoService
 
         if (empty($data['items']) || !is_array($data['items'])) {
             $errors['items'] = 'Debe incluir al menos un item en el pedido';
+        }
+
+        if (empty($data['direccion_entrega'])) {
+            $errors['direccion_entrega'] = 'La dirección de entrega es requerida';
+        }
+
+        if (empty($data['telefono_contacto'])) {
+            $errors['telefono_contacto'] = 'El teléfono de contacto es requerido';
+        }
+
+        if (empty($data['metodo_pago']) || !in_array($data['metodo_pago'], ['efectivo', 'tarjeta'])) {
+            $errors['metodo_pago'] = 'Método de pago inválido';
         }
 
         if (!empty($errors)) {

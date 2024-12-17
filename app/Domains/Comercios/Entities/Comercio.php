@@ -16,7 +16,6 @@ class Comercio extends Entity
         'telefono' => null,
         'email' => null,
         'categoria' => null,
-        'horario' => null,
         'estado' => 'activo'
     ];
 

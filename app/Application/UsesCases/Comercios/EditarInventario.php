@@ -15,10 +15,10 @@ class EditarInventario
 
     public function execute(int $idProducto, array $data): bool
     {
-        if (!isset($data['stock']) || $data['stock'] < 0) {
-            throw new ValidationException(['stock' => 'El stock debe ser mayor o igual a cero']);
+        if (!isset($data['stock']) || !is_numeric($data['stock']) || $data['stock'] < 0) {
+            throw new ValidationException(['stock' => 'El stock debe ser un número mayor o igual a cero']);
         }
 
-        return $this->productoRepository->update($idProducto, $data);
+        return $this->productoRepository->updateStock($idProducto, (int)$data['stock']);
     }
 }

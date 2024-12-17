@@ -14,7 +14,23 @@ class BaseController extends ResourceController
     {
         parent::initController($request, $response, $logger);
     }
+    protected function successResponse($data = null, string $message = 'Success'): array
+    {
+        return [
+            'success' => true,
+            'data' => $data,
+            'message' => $message
+        ];
+    }
 
+    protected function errorResponse(string $message, array $errors = [], int $code = 400): array
+    {
+        return [
+            'success' => false,
+            'message' => $message,
+            'errors' => $errors
+        ];
+    }
     protected function executeUseCase(callable $useCase)
     {
         try {
@@ -46,5 +62,12 @@ class BaseController extends ResourceController
                 'message' => 'Ha ocurrido un error interno del servidor'
             ], 500);
         }
+    }
+    public function options()
+    {
+        return $this->response->setHeader('Access-Control-Allow-Origin', '*')
+            ->setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE')
+            ->setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+            ->setStatusCode(204);
     }
 }

@@ -1,40 +1,62 @@
 <?php
-
 namespace App\Domains\Clientes\Services;
 
-use App\Domains\Clientes\Entities\Cliente;
-use App\Domains\Clientes\Entities\Pedido;
-use App\Infrastructure\Persistence\ClienteRepository;
+use App\Domains\Clientes\Repositories\IClienteRepository;
+use App\Exceptions\ValidationException;
+use App\Exceptions\DomainException;
 
 class ClienteService
 {
-    protected $clienteRepository;
+    private $clienteRepository;
 
-    public function __construct()
+    public function __construct(IClienteRepository $clienteRepository)
     {
-        $this->clienteRepository = new ClienteRepository();
+        $this->clienteRepository = $clienteRepository;
     }
 
-    public function registrarCliente(array $datos): Cliente
+    public function registrarCliente(array $data): array
     {
-        $cliente = new Cliente($datos);
+        $this->validarDatosCliente($data);
 
-        // Verificar si ya existe el email
-        if ($this->clienteRepository->findByEmail($cliente->email)) {
-            throw new \DomainException('El email ya está registrado');
+        // Verificar si existe el cliente
+        if ($this->clienteRepository->findByEmail($data['email'])) {
+            throw new DomainException('El email ya está registrado');
         }
 
-        $id = $this->clienteRepository->insert($cliente);
-        return $this->clienteRepository->find($id);
+        return $this->clienteRepository->create($data);
     }
 
-    public function crearPedido(Cliente $cliente, array $datosOrden): Orden
+    public function actualizarCliente(int $idCliente, array $data): bool
     {
-        $orden = new Pedido($datosOrden);
-        $orden->id_cliente = $cliente->id_cliente;
+        $this->validarDatosCliente($data);
 
-        // Aquí iría la lógica de validación de disponibilidad y distancia
+        $cliente = $this->clienteRepository->findById($idCliente);
+        if (!$cliente) {
+            throw new DomainException('Cliente no encontrado');
+        }
 
-        return $orden;
+        return $this->clienteRepository->update($idCliente, $data);
+    }
+
+    public function getPedidosCliente(int $idCliente): array
+    {
+        return $this->clienteRepository->getPedidosCliente($idCliente);
+    }
+
+    private function validarDatosCliente(array $data): void
+    {
+        $errors = [];
+
+        if (!empty($data['email']) && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            $errors['email'] = 'Email inválido';
+        }
+
+        if (!empty($data['telefono']) && !preg_match('/^\d{9}$/', $data['telefono'])) {
+            $errors['telefono'] = 'Teléfono inválido';
+        }
+
+        if (!empty($errors)) {
+            throw new ValidationException($errors);
+        }
     }
 }

@@ -3,36 +3,60 @@ namespace App\Domains\Comercios\Services;
 
 use App\Domains\Comercios\Repositories\IComercioRepository;
 use App\Domains\Comercios\Repositories\IProductoRepository;
-use App\Domains\Comercios\Entities\Comercio;
-use App\Domains\Comercios\Entities\Producto;
+use App\Infrastructure\Services\UploadService;
 use App\Exceptions\ValidationException;
 use App\Exceptions\DomainException;
 
 class ComercioService
 {
     private $comercioRepository;
-    private $productoRepository;
+    private $uploadService;
 
-    public function __construct(IComercioRepository $comercioRepository, IProductoRepository $productoRepository)
-    {
+    public function __construct(
+        IComercioRepository $comercioRepository,
+        UploadService $uploadService
+    ) {
         $this->comercioRepository = $comercioRepository;
-        $this->productoRepository = $productoRepository;
+        $this->uploadService = $uploadService;
     }
 
-    public function registrarComercio(array $data): Comercio
+    public function registrarComercio(array $data): array
     {
         $this->validarDatosComercio($data);
 
-        $comercio = new Comercio($data);
+        $comercio = new \App\Domains\Comercios\Entities\Comercio($data);
         if (!$comercio->validarUbicacion()) {
             throw new ValidationException(['ubicacion' => 'Ubicación geográfica inválida']);
         }
 
-        return new Comercio($this->comercioRepository->create($data));
+        return $this->comercioRepository->create($data);
+    }
+
+    public function registrarProducto(array $data, $image = null): array
+    {
+        // Procesar imagen si existe
+        $imagenUrl = null;
+        if ($image && $image->isValid()) {
+            $imagenUrl = $this->uploadService->uploadImage($image, 'productos');
+        }
+
+        try {
+            return $this->comercioRepository->registrarProducto($data, $imagenUrl);
+        } catch (\Exception $e) {
+            // Si algo falla y se subió una imagen, la eliminamos
+            if ($imagenUrl) {
+                $this->uploadService->deleteImage($imagenUrl);
+            }
+            throw $e;
+        }
+    }
+    public function editarProducto(int $idProducto, array $data, ?array $file = null): bool
+    {
+        $editarProductoUseCase = service('editarProducto');
+        return $editarProductoUseCase->execute($idProducto, $data, $file);
     }
     public function buscarCercano(float $latitud, float $longitud, float $radio): array
     {
-        // Validar coordenadas y radio
         if ($latitud < -90 || $latitud > 90 || $longitud < -180 || $longitud > 180) {
             throw new ValidationException(['ubicacion' => 'Coordenadas geográficas inválidas']);
         }
@@ -41,28 +65,19 @@ class ComercioService
             throw new ValidationException(['radio' => 'El radio debe ser mayor que 0']);
         }
 
-        // Delegar al repositorio la búsqueda
         return $this->comercioRepository->findNearby($latitud, $longitud, $radio);
     }
-    public function registrarProducto(array $data, $image = null): array
+
+    public function getDestacados(): array
     {
-        if (!$this->comercioRepository->findById($data['id_comercio'])) {
-            throw new DomainException('Comercio no encontrado');
-        }
-
-        if ($image) {
-            $data['imagen_url'] = $this->uploadService->uploadImage($image, 'productos');
-        }
-
-        try {
-            return $this->productoRepository->create($data);
-        } catch (\Exception $e) {
-            if ($data['imagen_url'] ?? false) {
-                $this->uploadService->deleteImage($data['imagen_url']);
-            }
-            throw new DomainException('Error al registrar el producto: ' . $e->getMessage());
-        }
+        return $this->comercioRepository->getDestacados();
     }
+
+    public function buscarPorFiltros(array $filtros): array
+    {
+        return $this->comercioRepository->buscarPorFiltros($filtros);
+    }
+
     private function validarDatosComercio(array $data): void
     {
         $errors = [];
@@ -79,10 +94,6 @@ class ComercioService
             $errors['ubicacion'] = 'La ubicación es requerida';
         }
 
-        if (empty($data['categoria'])) {
-            $errors['categoria'] = 'La categoría es requerida';
-        }
-
         if (!empty($errors)) {
             throw new ValidationException($errors);
         }
@@ -92,8 +103,8 @@ class ComercioService
     {
         $errors = [];
 
-        if (empty($data['nombre'])) {
-            $errors['nombre'] = 'El nombre del producto es requerido';
+        if (empty($data['nombre_producto'])) {
+            $errors['nombre_producto'] = 'El nombre del producto es requerido';
         }
 
         if (empty($data['precio']) || $data['precio'] <= 0) {

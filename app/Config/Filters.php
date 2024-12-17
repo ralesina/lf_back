@@ -3,8 +3,9 @@
 namespace Config;
 
 use CodeIgniter\Config\Filters as BaseFilters;
-use CodeIgniter\Filters\Cors;
 use CodeIgniter\Filters\CSRF;
+use CodeIgniter\Filters\Cors;
+
 use CodeIgniter\Filters\DebugToolbar;
 use CodeIgniter\Filters\ForceHTTPS;
 use CodeIgniter\Filters\Honeypot;
@@ -29,7 +30,8 @@ class Filters extends BaseFilters
         'toolbar'  => \CodeIgniter\Filters\DebugToolbar::class,
         'honeypot' => \CodeIgniter\Filters\Honeypot::class,
         'jwt-auth' => \App\Infrastructure\Http\Middleware\JWTAuthMiddleware::class,
-        'cors' => \App\Infrastructure\Http\Middleware\CORSMiddleware::class,
+        'cors' => \App\Infrastructure\Http\Middleware\CORSMiddleware::class
+
     ];
 
     /**
@@ -61,7 +63,7 @@ class Filters extends BaseFilters
      */
     public array $globals = [
         'before' => ['cors'],
-        'after' => []
+        'after' => ['cors'],
     ];
 
     /**

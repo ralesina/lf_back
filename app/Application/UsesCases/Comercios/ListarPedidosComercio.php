@@ -14,15 +14,14 @@ class ListarPedidosComercio
     private $comercioRepository;
 
     public function __construct(
-        IPedidoRepository   $pedidoRepository,
+        IPedidoRepository $pedidoRepository,
         IComercioRepository $comercioRepository
-    )
-    {
+    ) {
         $this->pedidoRepository = $pedidoRepository;
         $this->comercioRepository = $comercioRepository;
     }
 
-    public function execute(int $idUsuario): array
+    public function execute(int $idUsuario, ?string $estado = null): array
     {
         // Verificar que el usuario tenga un comercio asociado
         $comercio = $this->comercioRepository->findByUsuario($idUsuario);
@@ -31,6 +30,7 @@ class ListarPedidosComercio
             throw new ValidationException(['message' => 'Usuario no asociado a ningún comercio']);
         }
 
-        return $this->pedidoRepository->findByComercio($comercio['id_comercio']);
+        // Usar el repositorio para obtener los pedidos filtrados
+        return $this->pedidoRepository->findByComercioAndEstado($comercio['id_comercio'], $estado);
     }
 }

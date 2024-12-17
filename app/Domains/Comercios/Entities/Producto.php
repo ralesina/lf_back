@@ -12,27 +12,30 @@ class Producto extends Entity
         'descripcion' => null,
         'precio' => null,
         'categoria' => null,
-        'id_categoria' => null,
+        'imagen_url' => null,
+        'stock' => 0,
+        'estado' => 'activo',
         'fecha_creacion' => null,
-        'stock' => 0
+        'id_categoria' => null
     ];
 
     protected $casts = [
         'id_producto' => 'integer',
         'id_comercio' => 'integer',
         'precio' => 'float',
-        'id_categoria' => '?integer',
-        'stock' => 'integer'
+        'stock' => 'integer',
+        'id_categoria' => '?integer'
     ];
 
-    public function setPrecio($precio)
+    protected const ESTADOS_VALIDOS = ['activo', 'inactivo'];
+
+    public function esEstadoValido(string $estado): bool
     {
-        $this->attributes['precio'] = round((float)$precio, 2);
-        return $this;
+        return in_array($estado, self::ESTADOS_VALIDOS);
     }
 
-    public function tieneStockSuficiente(int $cantidadRequerida): bool
+    public function tieneStockSuficiente(int $cantidad): bool
     {
-        return ($this->attributes['stock'] ?? 0) >= $cantidadRequerida;
+        return $this->attributes['stock'] >= $cantidad;
     }
 }

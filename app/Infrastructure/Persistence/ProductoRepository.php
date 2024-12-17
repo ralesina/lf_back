@@ -26,13 +26,21 @@ class ProductoRepository implements IProductoRepository
 
     public function findByComercio(int $idComercio): array
     {
-        return $this->db->table('Productos p')
+        $builder = $this->db->table('Productos p')
             ->select('p.*, i.cantidad as stock, c.nombre_categoria')
             ->join('Inventario i', 'i.id_producto = p.id_producto', 'left')
             ->join('Categorias c', 'c.id_categoria = p.id_categoria', 'left')
-            ->where('p.id_comercio', $idComercio)
-            ->get()
-            ->getResultArray();
+            ->where('p.id_comercio', $idComercio);
+
+        // Log de la consulta SQL
+        log_message('debug', 'SQL Query: ' . $this->db->getLastQuery());
+
+        $result = $builder->get()->getResultArray();
+
+        // Log del resultado
+        log_message('debug', 'Query Result: ' . json_encode($result));
+
+        return $result ?: [];
     }
 
     public function findByCategoriaAndComercio(int $idCategoria, int $idComercio): array
@@ -87,11 +95,35 @@ class ProductoRepository implements IProductoRepository
         }
     }
 
-    public function update(int $id, array $data): bool
+    public function update(int $id, array $data): array
+    {
+        $this->db->transStart();
+
+        try {
+            // Preparar datos del producto
+            $this->db->table('Productos')
+                ->where('id_producto', $id)
+                ->update($data);
+
+            $this->db->transComplete();
+
+            if ($this->db->transStatus() === false) {
+                throw new \RuntimeException('Error al actualizar el producto');
+            }
+
+            return $this->findById($id);
+
+        } catch (\Exception $e) {
+            $this->db->transRollback();
+            throw $e;
+        }
+    }
+
+    public function cambiarEstado(int $id, string $estado): bool
     {
         return $this->db->table('Productos')
             ->where('id_producto', $id)
-            ->update($data);
+            ->update(['estado' => $estado]);
     }
 
     public function updateStock(int $id, int $cantidad): bool

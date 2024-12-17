@@ -10,7 +10,7 @@ class JWTService
 {
     private $config;
     private $key;
-
+    private static $user = null;
     public function __construct()
     {
         $this->config = config('Auth');
@@ -58,5 +58,15 @@ class JWTService
         } catch (\Exception $e) {
             throw new \App\Exceptions\AuthenticationException('Token inválido');
         }
+    }
+    public static function setUser($user)
+    {
+        self::$user = $user;
+    }
+
+    public static function getUser()
+    {
+        $request = service('request');
+        return isset($request->user) ? (array)$request->user : null;
     }
 }
